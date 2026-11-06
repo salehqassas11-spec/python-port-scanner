@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Generated scanner reports
+results.json
