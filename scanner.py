@@ -1,24 +1,46 @@
-import socket # Import Python's built-in networking module
 
-# Define the target IP address and TCP port to scan
-target = "127.0.0.1" # Localhost (our own computer)
-port = 8000 # TCP port we want to check
+import socket  # Python's built-in networking module
 
-# Create a TCP socket using IPv4 (AF_INET) and TCP (SOCK_STREAM)
-scanner = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# Define the target and the range of TCP ports
+target = "127.0.0.1"
+start_port = 7998
+end_port = 8002
 
-scanner.settimeout(1) # Set a 1-second timeout to prevent waiting indefinitely
 
-# Attempt to establish a TCP connection to the target IP and port
-# connect_ex() returns 0 if the connection succeeds
-result = scanner.connect_ex((target, port))
+# Function to check whether a TCP port is open
+def scan_port(ip, port):
 
-# Check whether the TCP connection was successful
-if result == 0:
-    print(f"[OPEN] Port {port}")
-else:
-    # A failed connection may indicate a closed or filtered port
-    print(f"[NOT OPEN] Port {port}")
+    # Create an IPv4 TCP socket
+    scanner = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    # Close the socket to release system resources
-    scanner.close()
+    # Wait a maximum of 1 second for a connection
+    scanner.settimeout(1)
+
+    try:
+        # Attempt a TCP connection to the target
+        result = scanner.connect_ex((ip, port))
+
+        # A return value of 0 means the connection succeeded
+        if result == 0:
+            print(f"[OPEN] Port {port}")
+        else:
+            print(f"[NOT OPEN] Port {port}")
+
+    except socket.error as error:
+        print(f"[ERROR] Port {port}: {error}")
+
+    finally:
+        # Always close the socket after scanning
+        scanner.close()
+
+
+# Display information about the scan
+print("=== Python TCP Port Scanner ===")
+print(f"Target: {target}")
+print(f"Scanning ports {start_port} to {end_port}...\n")
+
+# Loop through every port in the specified range
+for port in range(start_port, end_port + 1):
+    scan_port(target, port)
+
+print("\nScan completed!")
