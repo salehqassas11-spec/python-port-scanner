@@ -1,6 +1,8 @@
 
 import socket
 import argparse
+import json
+from datetime import datetime, timezone
 
 # Common TCP ports and their associated services
 services = {
@@ -18,86 +20,83 @@ services = {
 }
 
 
-# Function to check whether a TCP port is open
+# Function to scan a single TCP port
 def scan_port(ip, port):
 
+    service = services.get(port, "Unknown")
+
     # Create an IPv4 TCP socket
-    scanner = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as scanner:
 
-    # Set the connection timeout to 1 second
-    scanner.settimeout(1)
+        # Set a one-second connection timeout
+        scanner.settimeout(1)
 
-    try:
-        # Attempt a TCP connection to the target
-        result = scanner.connect_ex((ip, port))
+        try:
+            result = scanner.connect_ex((ip, port))
 
-        # Look up the common service for this port
-        service = services.get(port, "Unknown")
+            if result == 0:
+                status = "open"
+            else:
+                status = "not_open"
 
-        # Display the connection result
-        if result == 0:
-            print(f"[OPEN] Port {port} - {service}")
-        else:
-            print(f"[NOT OPEN] Port {port} - {service}")
+        except socket.error as error:
+            status = "error"
+            print(f"[ERROR] Port {port}: {error}")
 
-    except socket.error as error:
-        print(f"[ERROR] Port {port}: {error}")
-
-    finally:
-        # Always release the socket
-        scanner.close()
+    # Return structured data instead of only printing
+    return {
+        "port": port,
+        "status": status,
+        "service": service,
+    }
 
 
-# Main function to control the program
 def main():
 
-    # Create the command-line argument parser
+    # Configure command-line arguments
     parser = argparse.ArgumentParser(
         description="Python TCP Port Scanner"
     )
 
-    # Target IPv4 address
     parser.add_argument(
         "--target",
         default="127.0.0.1",
-        help="Target IPv4 address (default: 127.0.0.1)",
+        help="Target IPv4 address",
     )
 
-    # Starting TCP port
     parser.add_argument(
         "--start",
         type=int,
         default=7998,
-        help="Starting TCP port (default: 7998)",
+        help="Starting TCP port",
     )
 
-    # Ending TCP port
     parser.add_argument(
         "--end",
         type=int,
         default=8002,
-        help="Ending TCP port (default: 8002)",
+        help="Ending TCP port",
     )
 
-    # Read the arguments supplied by the user
+    # Optional JSON output filename
+    parser.add_argument(
+        "--output",
+        help="Save scan results to a JSON file",
+    )
+
     args = parser.parse_args()
 
     # Validate the port range
     if not (1 <= args.start <= args.end <= 65535):
-        parser.error(
-            "Ports must be between 1 and 65535, "
-            "and --start must not exceed --end."
-        )
+        parser.error("Invalid port range.")
 
-    # Validate the target as an IPv4 address
+    # Validate the IPv4 address
     try:
-        socket.inet_aton(args.target)
-        if args.target.count(".") != 3:
-            raise ValueError("Invalid IPv4 address")
-    except (OSError, ValueError):
-        parser.error("Please provide a valid IPv4 address.")
+        socket.inet_pton(socket.AF_INET, args.target)
+    except OSError:
+        parser.error("Invalid IPv4 address.")
 
-    # Display scan information
+    # Display scanner information
     print("===================================")
     print("       PYTHON TCP PORT SCANNER     ")
     print("===================================")
@@ -105,13 +104,58 @@ def main():
     print(f"Target: {args.target}")
     print(f"Scanning ports {args.start} to {args.end}...\n")
 
-    # Scan each port in the requested range
+    results = []
+
+    # Scan every port in the selected range
     for port in range(args.start, args.end + 1):
-        scan_port(args.target, port)
+
+        scan_result = scan_port(args.target, port)
+        results.append(scan_result)
+
+        print(
+            f"[{scan_result['status'].upper()}] "
+            f"Port {port} - {scan_result['service']}"
+        )
+
+    # Calculate scan statistics
+    open_ports = sum(
+        1 for result in results
+        if result["status"] == "open"
+    )
+
+    total_ports = len(results)
+
+    # Create a structured scan report
+    report = {
+        "target": args.target,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "start_port": args.start,
+        "end_port": args.end,
+        "total_ports_scanned": total_ports,
+        "open_ports": open_ports,
+        "results": results,
+    }
+
+    # Export the report if an output filename was provided
+    if args.output:
+        try:
+            with open(args.output, "w", encoding="utf-8") as file:
+                json.dump(report, file, indent=4)
+
+            print(f"\n[+] Report saved to {args.output}")
+
+        except OSError as error:
+            print(f"\n[ERROR] Could not save report: {error}")
+
+    # Display the scan summary
+    print("\n========== SCAN SUMMARY ==========")
+    print(f"Total ports scanned: {total_ports}")
+    print(f"Open ports: {open_ports}")
+    print(f"Other results: {total_ports - open_ports}")
+    print("==================================")
 
     print("\nScan completed!")
 
 
-# Run main() only when this file is executed directly
 if __name__ == "__main__":
     main()
